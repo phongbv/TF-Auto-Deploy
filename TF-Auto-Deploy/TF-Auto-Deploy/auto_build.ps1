@@ -1,4 +1,7 @@
-﻿Function Find-MsBuild([int] $MaxVersion = 2019)
+﻿#Load Assembly
+Add-Type -Path TF-Auto-Deploy.dll
+
+Function Find-MsBuild([int] $MaxVersion = 2019)
 {
     $vs2019Path = "$Env:programfiles (x86)\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin\msbuild.exe"
     $agentPath = "$Env:programfiles (x86)\Microsoft Visual Studio\2017\BuildTools\MSBuild\15.0\Bin\msbuild.exe"
@@ -20,20 +23,45 @@
         
     throw "Yikes - Unable to find msbuild"
 }
+
+Function Exe-Command([string] $cmd)
+{
+	$scriptCmd = [ScriptBlock]::Create($cmd)
+	Invoke-Command -ScriptBlock $scriptCmd
+}
+$latestChangeset = -1;
+$stopwatch =  [system.diagnostics.stopwatch]::StartNew()
 $msbuildPath = Find-MsBuild
 #echo $msbuildPath
 
-$localPath = "C:\LOS_DEV"
+$localPath = "E:\LOSRestruct\LOSRestruct2019"
 $webProfile = "$localPath\LOS.Website\Properties\PublishProfiles\LOS-Dev.pubxml"
 $solutionPath = "$localPath\LOS.Full.sln"
+$teamCollectionPath = "http://sptserver.ists.com.vn:8080/tfs/iLendingPro"
 
-#$deployCmd = """$msbuildPath""" +' "' + $solutionPath +'" /p:DeployOnBuild=true /p:PublishProfile="' + $webProfile +'"'
-$deployCmd = '&"' + $msbuildPath +'" "' + $solutionPath +'" /t:Clean /t:Rebuild /p:DeployOnBuild=true /p:PublishProfile="' + $webProfile +'"'
-#echo $deployCmd
-$scriptCmd = [ScriptBlock]::Create($deployCmd)
+
 #Get latest source
-.\TF-Auto-Deploy.exe $localPath "http://sptserver.ists.com.vn:8080/tfs/iLendingPro"
+#$latestChangeset = .\TF-Auto-Deploy.exe $localPath $teamCollectionPath 
+$sourceParams = $localPath,$teamCollectionPath 
+$latestChangeset =[TFS.SourceUtil]::GetLatestSource($sourceParams)
+if($latestChangeset -eq -1){
+    echo 'Co loi khi xay ra khi get code. Vui long thu lai.';
+    return;
+}
 #Deploy
+$deployCmd = '&"' + $msbuildPath +'" "' + $solutionPath +'" /p:DeployOnBuild=true /p:PublishProfile="' + $webProfile +'"'
 
-Invoke-Command -ScriptBlock $scriptCmd
+#Start Clean
+$cleanCmd = '&"' + $msbuildPath +'" "' + $solutionPath +'" /t:Clean'
+echo "Clean project"
 
+Exe-Command $cleanCmd
+$buildCmd = '&"' + $msbuildPath +'" "' + $solutionPath +'" /t:build'
+echo "Build"
+Exe-Command  $buildCmd
+echo "Deploy"
+Exe-Command $deployCmd
+
+$stopwatch.Stop();
+$totalSecs =  [math]::Round($stopwatch.Elapsed.TotalSeconds,0)
+echo ("Da deploy thanh cong changeset: " + $latestChangeset +", tong thoi gian deploy:" + $totalSecs +"s")
