@@ -64,4 +64,10 @@ Exe-Command $deployCmd
 
 $stopwatch.Stop();
 $totalSecs =  [math]::Round($stopwatch.Elapsed.TotalSeconds,0)
+$content = Get-Content $webProfile
+$pattern = "<publishUrl>(.*?)</publishUrl>"
+$deployDir = [System.Text.RegularExpressions.Regex]::Match($content,$pattern).Groups[1].Value
+echo $deployDir
+Rename-Item ($deployDir + "\\Web.config") -NewName ($deployDir + "\\Web.config.bak")
+Get-ChildItem ($deployDir+"\\*") | Compress-Archive -DestinationPath ($deployDir+"_"+$latestChangeset+".zip")
 echo ("Da deploy thanh cong changeset: " + $latestChangeset +", tong thoi gian deploy:" + $totalSecs +"s")
