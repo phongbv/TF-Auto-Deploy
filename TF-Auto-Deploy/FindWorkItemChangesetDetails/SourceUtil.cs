@@ -2,6 +2,7 @@
 using Microsoft.TeamFoundation.Framework.Client;
 using Microsoft.TeamFoundation.Framework.Common;
 using Microsoft.TeamFoundation.VersionControl.Client;
+using Microsoft.TeamFoundation.VersionControl.Common;
 using Microsoft.TeamFoundation.WorkItemTracking.Client;
 using System;
 using System.Collections.Generic;
@@ -13,13 +14,96 @@ using System.Linq;
 
 namespace FindWorkItemChangesetDetails
 {
-    class Program
+    public class SourceUtil
     {
+        static string URL = ConfigurationManager.AppSettings["TfsProjectUrl"];
+        TfsTeamProjectCollection collection = new TfsTeamProjectCollection(new Uri(URL));
+        VersionControlServer versionControlServer;
+        WorkItemStore store;
+        public SourceUtil()
+        {
+            collection.Authenticate();
+            versionControlServer = collection.GetService<VersionControlServer>();
+            store = new WorkItemStore(collection);
+        }
         static void Main(string[] args)
         {
-            GetChangesForWorkItem();
+            new SourceUtil().GetChangesForWorkItem();
+        }
+        #region Branch Util
+        public BranchObject FindBranchByName(BranchObject currentBranch, string relatedBranchName)
+        {
+            BranchObject relatedBranch = null;
+            // Find in children branch
+            foreach (var item in currentBranch.RelatedBranches)
+            {
+                if (item.Item.Substring(item.Item.LastIndexOf("/") + 1).ToUpper() == relatedBranchName.ToUpper())
+                {
+                    relatedBranch = versionControlServer.QueryBranchObjects(new ItemIdentifier(item.Item), RecursionType.None).SingleOrDefault();
+                    break;
+                }
+            }
+            // Find in parent branch
+            if (relatedBranch == null)
+            {
+                string parentPath = currentBranch.Properties.ParentBranch.Item;
+                if (parentPath.Substring(parentPath.LastIndexOf("/") + 1).ToUpper() == relatedBranchName.ToUpper())
+                {
+                    relatedBranch = versionControlServer.QueryBranchObjects(new ItemIdentifier(parentPath), RecursionType.None).SingleOrDefault();
+                }
+            }
+            return relatedBranch;
+        }
+        public BranchObject GetBranch(string path)
+        {
+            BranchObject branchObject = versionControlServer.QueryBranchObjects(new ItemIdentifier(path), RecursionType.None).SingleOrDefault();
+            return branchObject;
+        }
+        public string GetParentPath(string path)
+        {
+            BranchObject branchObject = versionControlServer.QueryBranchObjects(new ItemIdentifier(path), RecursionType.None).Single();
+            if (branchObject.Properties.ParentBranch != null)
+                return branchObject.Properties.ParentBranch.Item;
+            else
+                throw new Exception($"Branch '{path}' does not have a parent");
         }
 
+        public string MergeBranch(Workspace targetWorkspace, string sourceBranchServerPath, string targetBranchServerPath, int changesetId)
+        {
+            var changeset = new ChangesetVersionSpec(changesetId);
+            try
+            {
+                var getStatus = targetWorkspace.Merge(sourceBranchServerPath,
+                                targetBranchServerPath,
+                                changeset, changeset,
+                                LockLevel.None,
+                               RecursionType.Full,
+                               MergeOptionsEx.None);
+                return $"Number of files {getStatus.NumFiles}, number of conflicts {getStatus.NumConflicts}";
+            }
+            catch (Exception ex)
+            {
+                return ex.Message;
+            }
+        }
+
+        #endregion
+        public Workspace GetWorkspace(string localPath)
+        {
+            Workspace currentWorkspace = null;
+            var workspaces = versionControlServer.QueryWorkspaces(null, versionControlServer.AuthorizedUser, Environment.MachineName);
+            foreach (var workspace in workspaces)
+            {
+                if (workspace.Folders.Any(e => e.IsCloaked == false && e.LocalItem == localPath))
+                {
+                    currentWorkspace = workspace;
+                    break;
+                }
+            }
+            return currentWorkspace;
+        }
+
+        #region Backup
         private static void V1()
         {
             //Initialize TFS Server object
@@ -113,6 +197,7 @@ namespace FindWorkItemChangesetDetails
             //Write datable to excel file using StreamWriter
             WriteToExcel(dt);
         }
+        #endregion
         private class ChangesetInfo : IComparable<ChangesetInfo>
         {
             public int ChangesetId { get; set; }
@@ -128,28 +213,37 @@ namespace FindWorkItemChangesetDetails
                 return $"Changeset { ChangesetId} - WorkItem { WorkItemId } - Owner {Owner}";
             }
         }
-        private static void GetChangesForWorkItem()
+
+        private void LoadWorkItem(int id, List<WorkItem> workItems, Dictionary<int, bool> lstWIId)
+        {
+            if (lstWIId.ContainsKey(id) == false)
+            {
+                lstWIId[id] = true;
+                var wi = store.GetWorkItem(id);
+                // Add main WorkItem
+                workItems.Add(wi);
+                // Add Related Work item
+                foreach (WorkItemLink itemLink in wi.WorkItemLinks)
+                {
+                    LoadWorkItem(itemLink.TargetId, workItems, lstWIId);
+                }
+            }
+        }
+        private void GetChangesForWorkItem()
         {
             List<ChangesetInfo> allChangeset = new List<ChangesetInfo>();
-            string URL = "http://sptserver.ists.com.vn:8080/tfs/iLendingPro";
-            //WriteLine($"Local Path: {localPath}");
-            System.Diagnostics.Debug.WriteLine($"Project Url: {URL}");
-            TfsTeamProjectCollection collection = new TfsTeamProjectCollection(new Uri(URL));
-            collection.Authenticate();
-            //TfsTeamProjectCollection collection = configurationServer.GetTeamProjectCollection(collectionId);
-            //Get Source Control/Version Control repository for selected project collection
-            VersionControlServer versionControlServer = collection.GetService<VersionControlServer>();
+
             //Get Details of Version Control using artifact provider
             VersionControlArtifactProvider artifactProvider = versionControlServer.ArtifactProvider;
-            var vcs = collection.GetService<VersionControlServer>();
-            var store = new WorkItemStore(collection);
+
             var workItems = new List<WorkItem>();
+            var lstWIId = new Dictionary<int, bool>();
             foreach (var item in File.ReadAllLines("list_item.txt"))
             {
                 int tmp = 0;
                 if (int.TryParse(item, out tmp))
                 {
-                    workItems.Add(store.GetWorkItem(tmp));
+                    LoadWorkItem(tmp, workItems, lstWIId);
                 }
             }
 
@@ -161,32 +255,42 @@ namespace FindWorkItemChangesetDetails
                 DataRow dr = dt.NewRow();
                 dr["ID"] = workItem.Id;
                 dr["Title"] = workItem.Title;
-                IEnumerable<Changeset> changesets = workItem.Links.OfType<ExternalLink>().Select(link => artifactProvider.GetChangeset(new Uri(link.LinkedArtifactUri)));
+                //IEnumerable<Changeset> changesets = workItem.Links.OfType<ExternalLink>().Select(link => artifactProvider.GetChangeset(new Uri(link.LinkedArtifactUri)));
 
                 //iterate through changesets' to get each changeset details
-                foreach (Changeset changeset in changesets)
+                foreach (var link in workItem.Links.OfType<ExternalLink>())
+                //foreach (Changeset changeset in changesets)
                 {
-                    dr["ChangesetId"] = changeset.ChangesetId;
-                    foreach (Change changes in changeset.Changes)
+                    try
                     {
-                        //ServerItem is the full path of a source control file associated to changeset
-                        if (changes.Item.ServerItem.Contains(ConfigurationManager.AppSettings["DevBranchName"]))
+                        var changeset = artifactProvider.GetChangeset(new Uri(link.LinkedArtifactUri));
+                        dr["ChangesetId"] = changeset.ChangesetId;
+                        foreach (Change changes in changeset.Changes)
                         {
-                            dr["Fix in DevBranch"] = "Yes";
-                            allChangeset.Add(new ChangesetInfo()
+                            //ServerItem is the full path of a source control file associated to changeset
+                            if (changes.Item.ServerItem.Contains(ConfigurationManager.AppSettings["DevBranchName"]))
                             {
-                                ChangesetId = changeset.ChangesetId,
-                                WorkItemId = workItem.Id,
-                                Owner = changeset.OwnerDisplayName
-                            });
-                            break;
-                        }
-                        else if (changes.Item.ServerItem.Contains(ConfigurationManager.AppSettings["ReleaseBranchName"]))
-                        {
-                            dr["Fix in ReleaseBranch"] = "Yes";
-                            break;
+                                dr["Fix in DevBranch"] = "Yes";
+                                allChangeset.Add(new ChangesetInfo()
+                                {
+                                    ChangesetId = changeset.ChangesetId,
+                                    WorkItemId = workItem.Id,
+                                    Owner = changeset.OwnerDisplayName
+                                });
+                                break;
+                            }
+                            else if (changes.Item.ServerItem.Contains(ConfigurationManager.AppSettings["ReleaseBranchName"]))
+                            {
+                                dr["Fix in ReleaseBranch"] = "Yes";
+                                break;
+                            }
                         }
                     }
+                    catch (Exception)
+                    {
+
+                    }
+
                 }
                 dt.Rows.Add(dr);
             }

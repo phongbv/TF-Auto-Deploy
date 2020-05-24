@@ -48,6 +48,7 @@ namespace TFS
                 Write(latestChangesetId);
                 return latestChangesetId;
             }
+
             var allPendingChanges = currentWorkspace.GetPendingChanges();
             if (allPendingChanges.Length > 0)
             {

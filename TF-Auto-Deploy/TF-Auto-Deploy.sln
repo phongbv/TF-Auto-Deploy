@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TF-Auto-Deploy", "TF-Auto-D
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FindWorkItemChangesetDetails", "FindWorkItemChangesetDetails\FindWorkItemChangesetDetails.csproj", "{0DFE27FC-058F-4DC8-B6AE-79A6848900E5}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SourceManagement", "SourceManagement\SourceManagement.csproj", "{C52E306C-26ED-40AB-9B47-33F1D5D92BDD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{0DFE27FC-058F-4DC8-B6AE-79A6848900E5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0DFE27FC-058F-4DC8-B6AE-79A6848900E5}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0DFE27FC-058F-4DC8-B6AE-79A6848900E5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C52E306C-26ED-40AB-9B47-33F1D5D92BDD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C52E306C-26ED-40AB-9B47-33F1D5D92BDD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C52E306C-26ED-40AB-9B47-33F1D5D92BDD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C52E306C-26ED-40AB-9B47-33F1D5D92BDD}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
