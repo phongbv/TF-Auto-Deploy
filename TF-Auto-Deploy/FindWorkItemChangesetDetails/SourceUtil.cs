@@ -29,6 +29,7 @@ namespace FindWorkItemChangesetDetails
         static void Main(string[] args)
         {
             new SourceUtil().GetChangesForWorkItem();
+            Console.ReadKey();
         }
         #region Branch Util
         public BranchObject FindBranchByName(BranchObject currentBranch, string relatedBranchName)
@@ -229,7 +230,7 @@ namespace FindWorkItemChangesetDetails
                 }
             }
         }
-        private void GetChangesForWorkItem()
+        public void GetChangesForWorkItem()
         {
             List<ChangesetInfo> allChangeset = new List<ChangesetInfo>();
 
@@ -268,6 +269,10 @@ namespace FindWorkItemChangesetDetails
                         foreach (Change changes in changeset.Changes)
                         {
                             //ServerItem is the full path of a source control file associated to changeset
+                            if (changes.Item.ServerItem.Contains("$/iLendingPro/Database/iLendingpro-ABBV2-2019"))
+                            {
+                                File.AppendAllLines("script.txt", new string[] { $"Changeset {changeset.ChangesetId}\tWorkItem: {workItem.Id}\tSource file {changes.Item.ServerItem}"  });
+                            }
                             if (changes.Item.ServerItem.Contains(ConfigurationManager.AppSettings["DevBranchName"]))
                             {
                                 dr["Fix in DevBranch"] = "Yes";

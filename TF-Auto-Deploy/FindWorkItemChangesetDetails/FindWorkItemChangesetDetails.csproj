@@ -5,7 +5,7 @@
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{0DFE27FC-058F-4DC8-B6AE-79A6848900E5}</ProjectGuid>
-    <OutputType>Library</OutputType>
+    <OutputType>Exe</OutputType>
     <RootNamespace>FindWorkItemChangesetDetails</RootNamespace>
     <AssemblyName>FindWorkItemChangesetDetails</AssemblyName>
     <TargetFrameworkVersion>v4.5.2</TargetFrameworkVersion>
